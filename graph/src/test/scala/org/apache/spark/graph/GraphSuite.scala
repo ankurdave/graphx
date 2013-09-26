@@ -10,6 +10,12 @@ class GraphSuite extends FunSuite with LocalSparkContext {
 
 //  val sc = new SparkContext("local[4]", "test")
 
+  private def benchmark[U](f: => U): Long = {
+    val start = System.nanoTime
+    f
+    System.nanoTime - start
+  }
+
   test("Graph Creation") {
     withSpark(new SparkContext("local", "test")) { sc =>
       val rawEdges = (0L to 100L).zip((1L to 99L) :+ 0L)
@@ -40,6 +46,22 @@ class GraphSuite extends FunSuite with LocalSparkContext {
         (a: Int, b: Int) => throw new Exception("reduceFunc called unexpectedly"),
         EdgeDirection.In).vertices.map(v => (v.id, v.data._2))
       assert(noVertexValues.collect().toSet === Set((0, None), (1, None), (2, None), (3, None)))
+    }
+  }
+
+  test("aggregateNeighbors performance") {
+    withSpark(new SparkContext("local", "test")) { sc =>
+      val star = Graph(sc.parallelize(1 to 10000).map(v => (0, v)))
+
+      val time = benchmark {
+        val indegrees = star.aggregateNeighbors(
+          (vid, edge) => Some(1),
+          (a: Int, b: Int) => a + b,
+          EdgeDirection.In).vertices.map(v => (v.id, v.data._2.getOrElse(0)))
+        indegrees.collect()
+      }
+
+      println(time)
     }
   }
 
