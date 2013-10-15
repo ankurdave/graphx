@@ -21,25 +21,51 @@ class GraphSuite extends FunSuite with LocalSparkContext {
 
   test("aggregateNeighbors") {
     withSpark(new SparkContext("local", "test")) { sc =>
-      val star = Graph(sc.parallelize(List((0, 1), (0, 2), (0, 3))))
+      val n = 10000
+      val adj: Seq[(Vid, Vid)] = (1 to n).map(x => (0: Vid, x: Vid))
+      val star = Graph(sc.parallelize(adj))
 
       val indegrees = star.aggregateNeighbors(
         (vid, edge) => Some(1),
         (a: Int, b: Int) => a + b,
         EdgeDirection.In).vertices.map(v => (v.id, v.data._2.getOrElse(0)))
-      assert(indegrees.collect().toSet === Set((0, 0), (1, 1), (2, 1), (3, 1)))
+      assert(indegrees.collect().toSet === Set((0, 0)) ++ (1 to n).map(x => (x, 1)).toSet)
 
       val outdegrees = star.aggregateNeighbors(
         (vid, edge) => Some(1),
         (a: Int, b: Int) => a + b,
         EdgeDirection.Out).vertices.map(v => (v.id, v.data._2.getOrElse(0)))
-      assert(outdegrees.collect().toSet === Set((0, 3), (1, 0), (2, 0), (3, 0)))
+      assert(outdegrees.collect().toSet === (1 to n).map(x => (x, 0)).toSet ++ Set((0, n)))
 
       val noVertexValues = star.aggregateNeighbors[Int](
         (vid: Vid, edge: EdgeTriplet[Int, Int]) => None,
         (a: Int, b: Int) => throw new Exception("reduceFunc called unexpectedly"),
         EdgeDirection.In).vertices.map(v => (v.id, v.data._2))
-      assert(noVertexValues.collect().toSet === Set((0, None), (1, None), (2, None), (3, None)))
+      assert(noVertexValues.collect().toSet === (0 to n).map(x => (x, None)).toSet)
+    }
+  }
+
+  test("aggregateNeighbors example") {
+    withSpark(new SparkContext("local", "test")) { sc =>
+      import org.apache.spark.graph._
+
+      val graph = Graph(sc.parallelize(List((0, 1), (0, 2), (2, 1)))).mapVertices(v => v.id.toInt)
+
+      def mapFunc(vid: Vid, edge: EdgeTriplet[Int, Int]): Option[(Int, Double)] =
+        Some((edge.otherVertex(vid).data, 1))
+
+      def mergeFunc(a: (Int, Double), b: (Int, Double)): (Int, Double) =
+        (a._1 + b._1, a._2 + b._2)
+
+      val agg = graph.aggregateNeighbors[(Int,Double)](mapFunc _, mergeFunc _, EdgeDirection.In)
+
+      val averageFollowerAge: Graph[Double, Int] =
+        agg.mapVertices { v => v.data._2 match {
+          case Some((sum, followers)) => sum.toDouble / followers
+          case None => Double.NaN
+        }}
+
+      averageFollowerAge.vertices.collect
     }
   }
 
