@@ -69,9 +69,6 @@ object Analytics extends Logging {
       // Set the vertex attributes to the initial pagerank values
       .mapVertices( (id, attr) => 1.0 )
 
-    // Display statistics about pagerank
-    println(pagerankGraph.statistics)
-
     // Define the three functions needed to implement PageRank in the GraphX
     // version of Pregel
     def vertexProgram(id: Vid, attr: Double, msgSum: Double): Double =
@@ -140,9 +137,6 @@ object Analytics extends Logging {
       .mapTriplets( e => 1.0 / e.srcAttr )
       // Set the vertex attributes to (initalPR, delta = 0)
       .mapVertices( (id, attr) => (0.0, 0.0) )
-
-    // Display statistics about pagerank
-    println(pagerankGraph.statistics)
 
     // Define the three functions needed to implement PageRank in the GraphX
     // version of Pregel
