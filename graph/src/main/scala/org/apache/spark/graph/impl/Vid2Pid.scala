@@ -47,6 +47,11 @@ class Vid2Pid(
     srcAttrOnly.persist(newLevel)
     dstAttrOnly.persist(newLevel)
     noAttrs.persist(newLevel)
+
+    pid2VidBothAttrs.persist(newLevel)
+    pid2VidSrcAttrOnly.persist(newLevel)
+    pid2VidDstAttrOnly.persist(newLevel)
+    pid2VidNoAttrs.persist(newLevel)
   }
 
   private def createVid2Pid(
@@ -82,6 +87,6 @@ class Vid2Pid(
         pids.foreach { pid => pid2vidLocal(pid) += vid }
       }
       Iterator(pid2vidLocal.map(_.result))
-    }
+    }.cache()
   }
 }
