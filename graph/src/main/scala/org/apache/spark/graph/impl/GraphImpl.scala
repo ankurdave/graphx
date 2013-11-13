@@ -322,15 +322,23 @@ object GraphImpl {
     mergeFunc: (VD, VD) => VD): GraphImpl[VD,ED] = {
 
     vertices.cache
-    edges.cache
-    // Get the set of all vids
-    val allVids = vertices.map(_._1).union(edges.flatMap(e => Seq(e.srcId, e.dstId)))
+    println("GraphImpl.apply: vertices.numPartitions: %d".format(vertices.partitions.size))
+    val etable = createETable(edges).cache
+    // for ((pid, edgePartition) <- etable.collect) println("GraphImpl.apply: eTable pid %d".format(pid))
+    println("GraphImpl.apply: etable.numPartitions: %d".format(etable.partitions.size))
+    // Get the set of all vids, preserving partitions
+    val implicitVids = etable.flatMap {
+      case (pid, partition) => Array.concat(partition.srcIds, partition.dstIds)
+    }
+    println("GraphImpl.apply: implicitVids.numPartitions: %d".format(implicitVids.partitions.size))
+    val allVids = vertices.map(_._1).union(implicitVids)
+    println("GraphImpl.apply: allVids.numPartitions: %d".format(allVids.partitions.size))
     // Index the set of all vids
     val index = VertexSetRDD.makeIndex(allVids, Some(Partitioner.defaultPartitioner(vertices)))
+    println("GraphImpl.apply: index.rdd.numPartitions: %d".format(index.rdd.partitions.size))
     // Index the vertices and fill in missing attributes with the default
     val vtable = VertexSetRDD(vertices, index, mergeFunc).fillMissing(defaultVertexAttr)
 
-    val etable = createETable(edges)
     val vid2pid = new Vid2Pid(etable, vtable.index)
     val localVidMap = createLocalVidMap(etable)
     new GraphImpl(vtable, vid2pid, localVidMap, etable)

@@ -14,7 +14,7 @@ import org.apache.spark.graph._
  */
 class Vid2Pid(
     eTable: RDD[(Pid, EdgePartition[ED])] forSome { type ED },
-    vTableIndex: VertexSetIndex) {
+    vTableIndex: VertexSetIndex) extends org.apache.spark.Logging {
 
   val bothAttrs: VertexSetRDD[Array[Pid]] = createVid2Pid(true, true)
   val srcAttrOnly: VertexSetRDD[Array[Pid]] = createVid2Pid(true, false)
@@ -52,8 +52,10 @@ class Vid2Pid(
   private def createVid2Pid(
       includeSrcAttr: Boolean,
       includeDstAttr: Boolean): VertexSetRDD[Array[Pid]] = {
+    println("Vid2Pid.createVid2Pid: eTable has %d partitions".format(eTable.partitions.size))
     val preAgg = eTable.mapPartitions { iter =>
       val (pid, edgePartition) = iter.next()
+      println("Mapping over eTable, partition %d".format(pid))
       val vSet = new VertexSet
       if (includeSrcAttr || includeDstAttr) {
         edgePartition.foreach(e => {
@@ -76,6 +78,7 @@ class Vid2Pid(
    */
   private def createPid2Vid(vid2pid: VertexSetRDD[Array[Pid]]): RDD[Array[Array[Vid]]] = {
     val numPartitions = vid2pid.partitions.size
+    logInfo("createPid2Vid with %d partitions".format(numPartitions))
     vid2pid.mapPartitions { iter =>
       val pid2vidLocal = Array.fill[ArrayBuilder[Vid]](numPartitions)(ArrayBuilder.make[Vid])
       for ((vid, pids) <- iter) {
