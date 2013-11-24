@@ -10,7 +10,8 @@ import org.apache.spark.graph.impl.MsgRDDFunctions._
 /**
  * Stores the vertex attribute values after they are replicated.
  */
-class VTableReplicated[VD: ClassManifest](
+class VTableReplicated
+  [@specialized(Char, Int, Boolean, Byte, Long, Float, Double) VD: ClassManifest](
     vTable: VertexSetRDD[VD],
     eTable: RDD[(Pid, EdgePartition[ED])] forSome { type ED },
     vertexPlacement: VertexPlacement) {
@@ -35,7 +36,9 @@ class VTableReplicated[VD: ClassManifest](
     }
 }
 
-class VertexAttributeBlock[VD: ClassManifest](val vids: Array[Vid], val attrs: Array[VD])
+class VertexAttributeBlock
+  [@specialized(Char, Int, Boolean, Byte, Long, Float, Double) VD: ClassManifest](
+    val vids: Array[Vid], val attrs: Array[VD])
 
 object VTableReplicated {
   protected def createVTableReplicated[VD: ClassManifest](
