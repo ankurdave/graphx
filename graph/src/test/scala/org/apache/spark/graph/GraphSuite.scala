@@ -155,7 +155,7 @@ class GraphSuite extends FunSuite with LocalSparkContext {
     }
   }
 
-  test("deltaJoinVertices") {
+  test("leftOuterJoinVerticesKeepChanged") {
     withSpark(new SparkContext("local", "test")) { sc =>
       // Create a star graph of 10 vertices
       val n = 10
@@ -165,7 +165,7 @@ class GraphSuite extends FunSuite with LocalSparkContext {
       val changedVerts = star.vertices.filter(_._1 % 2 == 0).mapValues((vid, attr) => "v2")
 
       // Apply the modification to the graph
-      val changedStar = star.deltaJoinVertices(changedVerts)
+      val changedStar = star.leftOuterJoinVerticesKeepChanged(changedVerts)
 
       val newVertices = star.vertices.leftZipJoin(changedVerts) { (vid, oldVd, newVdOpt) =>
         newVdOpt match {

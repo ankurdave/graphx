@@ -106,7 +106,7 @@ object Pregel extends Logging {
       // receive the messages
       val changedVerts = g.vertices.deltaJoin(messages)(vprog).cache() // updating the vertices
       // replicate the changed vertices
-      g = g.deltaJoinVertices(changedVerts)
+      g = g.leftOuterJoinVerticesKeepChanged(changedVerts)
       // count the iteration
       i += 1
     }
@@ -190,7 +190,7 @@ object Pregel extends Logging {
       // replicate the changed vertices
       twoAgoG = prevG
       prevG = g
-      g = g.deltaJoinVertices(changedVerts)
+      g = g.rightOuterJoinVertices(changedVerts)
       g.vertices.cache()
 
       val oldMessages = messages

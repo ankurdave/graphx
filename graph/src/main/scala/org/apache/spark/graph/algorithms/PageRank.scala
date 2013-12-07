@@ -188,7 +188,7 @@ object PageRank extends Logging {
       println("[iter %d] filteredDeltas:".format(i)); filteredDeltas.foreach { case (vid, delta) => println("(%d, %f)".format(vid, delta)) }
 
       // Apply deltas
-      deltaGraph = deltaGraph.deltaJoinVertices(filteredDeltas).cache()
+      deltaGraph = deltaGraph.rightOuterJoinVertices(filteredDeltas).cache()
 
       println("[iter %d] deltaGraph:".format(i)); deltaGraph.vertices.foreach { case (vid, delta) => println("(%d, %f)".format(vid, delta)) }
 

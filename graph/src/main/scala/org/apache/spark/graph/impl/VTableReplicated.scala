@@ -9,13 +9,17 @@ import org.apache.spark.graph._
 
 /**
  * Stores the vertex attribute values after they are replicated.
+ *
+ * @param prevVTableReplicated if provided, update the given VTableReplicated instead of creating a
+ * new one. If the second element of the pair is true, keep the replicated vertices from the
+ * previous VTableReplicated in addition to those in vTable; otherwise, mask out the old vertices.
  */
 private[impl]
 class VTableReplicated[VD: ClassManifest](
     vTable: VertexRDD[VD],
     eTable: EdgeRDD[_],
     vertexPlacement: VertexPlacement,
-    prevVTableReplicated: Option[VTableReplicated[VD]] = None) {
+    prevVTableReplicated: Option[(VTableReplicated[VD], Boolean)] = None) {
 
   val bothAttrs: RDD[(Pid, VertexPartition[VD])] =
     createVTableReplicated(vTable, eTable, vertexPlacement, true, true)
@@ -63,13 +67,16 @@ class VTableReplicated[VD: ClassManifest](
     // TODO: Consider using a specialized shuffler.
 
     prevVTableReplicated match {
-      case Some(vTableReplicated) =>
+      case Some((vTableReplicated, keepPrevVerts)) =>
         val prev: RDD[(Pid, VertexPartition[VD])] =
           vTableReplicated.get(includeSrcAttr, includeDstAttr)
 
         prev.zipPartitions(msgsByPartition) { (vTableIter, msgsIter) =>
           val (pid, vertexPartition) = vTableIter.next()
-          val newVPart = vertexPartition.updateUsingIndex(msgsIter.flatMap(_._2.iterator))(vdManifest)
+          val allMsgs = msgsIter.flatMap(_._2.iterator)
+          val newVPart =
+            if (keepPrevVerts) vertexPartition.updateUsingIndex(allMsgs)
+            else vertexPartition.createUsingIndexAndValues(allMsgs)
           Iterator((pid, newVPart))
         }.cache().setName("VTableReplicated delta %s %s".format(includeSrcAttr, includeDstAttr))
 

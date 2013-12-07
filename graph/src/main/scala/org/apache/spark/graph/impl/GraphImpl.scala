@@ -245,10 +245,17 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
     new GraphImpl(newVTable, edges, vertexPlacement)
   }
 
-  override def deltaJoinVertices(changedVerts: VertexRDD[VD]): Graph[VD, ED] = {
+  override def rightOuterJoinVertices(changedVerts: VertexRDD[VD]): Graph[VD, ED] = {
     val newVerts = vertices.update(changedVerts)
     val newVTableReplicated = new VTableReplicated(
-      changedVerts, edges, vertexPlacement, Some(vTableReplicated))
+      changedVerts, edges, vertexPlacement, Some((vTableReplicated, false)))
+    new GraphImpl(newVerts, edges, vertexPlacement, newVTableReplicated)
+  }
+
+  override def leftOuterJoinVerticesKeepChanged(changedVerts: VertexRDD[VD]): Graph[VD, ED] = {
+    val newVerts = vertices.update(changedVerts)
+    val newVTableReplicated = new VTableReplicated(
+      changedVerts, edges, vertexPlacement, Some((vTableReplicated, true)))
     new GraphImpl(newVerts, edges, vertexPlacement, newVTableReplicated)
   }
 } // end of class GraphImpl

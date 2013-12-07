@@ -180,7 +180,11 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
   }
 
   /**
-   * Similar effect as aggregateUsingIndex((a, b) => a)
+   * Create a new VertexPartition containing only the elements in iter, but reusing the index from
+   * this VertexPartition.
+   *
+   * This has the same effect as
+   * {{{aggregateUsingIndex(iter, (a, b) => a)}}}
    */
   def createUsingIndex[VD2: ClassManifest](iter: Iterator[Product2[Vid, VD2]])
     : VertexPartition[VD2] = {
@@ -192,6 +196,26 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
       newValues(pos) = vdata
     }
     new VertexPartition[VD2](index, newValues, newMask, srcEdgePositions)
+  }
+
+  /**
+   * Create a new VertexPartition containing only the elements in iter, but reusing the index from
+   * this VertexPartition. Elements from this VertexPartition that don't correspond to elements in
+   * iter will remain in the resulting VertexPartition, but will be hidden by the mask.
+   *
+   * Apart from this masking behavior, this has a similar effect as
+   * {{{aggregateUsingIndex(iter, (a, b) => a)}}}
+   */
+  def createUsingIndexAndValues(iter: Iterator[Product2[Vid, VD]]): VertexPartition[VD] = {
+    val newMask = new BitSet(capacity)
+    val newValues = new Array[VD](capacity)
+    System.arraycopy(values, 0, newValues, 0, values.length)
+    iter.foreach { case (vid, vdata) =>
+      val pos = index.getPos(vid)
+      newMask.set(pos)
+      newValues(pos) = vdata
+    }
+    new VertexPartition[VD](index, newValues, newMask, srcEdgePositions)
   }
 
   /**
@@ -222,17 +246,20 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
     new VertexPartition(index, newValues, mask, srcEdgePositions)
   }
 
-  def updateUsingIndex[VD2: ClassManifest](iter: Iterator[Product2[Vid, VD2]])
-    : VertexPartition[VD2] = {
-    val newMask = new BitSet(capacity)
-    val newValues = new Array[VD2](capacity)
+  /**
+   * Replace vertices in this VertexPartition with corresponding vertices in iter, and leave
+   * unchanged the vertices that do not appear in iter.
+   *
+   * This is the same operation as update, but for an Iterator.
+   */
+  def updateUsingIndex(iter: Iterator[Product2[Vid, VD]]): VertexPartition[VD] = {
+    val newValues = new Array[VD](capacity)
     System.arraycopy(values, 0, newValues, 0, newValues.length)
     iter.foreach { case (vid, vdata) =>
       val pos = index.getPos(vid)
-      newMask.set(pos)
       newValues(pos) = vdata
     }
-    new VertexPartition[VD2](index, newValues, newMask, srcEdgePositions)
+    new VertexPartition[VD](index, newValues, mask, srcEdgePositions)
   }
 
   def aggregateUsingIndex[VD2: ClassManifest](
