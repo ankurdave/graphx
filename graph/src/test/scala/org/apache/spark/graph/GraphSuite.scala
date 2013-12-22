@@ -212,9 +212,12 @@ class GraphSuite extends FunSuite with LocalSparkContext {
       val n = 5
       val star = starGraph(sc, n).mapVertices { (_, _) => 0 }
       val starDeg = star.joinVertices(star.degrees){ (vid, oldV, deg) => deg }
-      val neighborDegreeSums = starDeg.mapReduceTriplets(
-        edge => Iterator((edge.srcId, edge.dstAttr), (edge.dstId, edge.srcAttr)),
-        (a: Int, b: Int) => a + b)
+      val neighborDegreeSums = starDeg.mapReduceTriplets[Int](
+        et => {
+          et.sendMessage(et.srcId, et.dstAttr)
+          et.sendMessage(et.dstId, et.srcAttr)
+        },
+        _ + _)
       assert(neighborDegreeSums.collect().toSet === (0 to n).map(x => (x, n)).toSet)
 
       // activeSetOpt
@@ -222,13 +225,16 @@ class GraphSuite extends FunSuite with LocalSparkContext {
       val complete = Graph.fromEdgeTuples(sc.parallelize(allPairs, 3), 0)
       val vids = complete.mapVertices((vid, attr) => vid).cache()
       val active = vids.vertices.filter { case (vid, attr) => attr % 2 == 0 }
-      val numEvenNeighbors = vids.mapReduceTriplets(et => {
-        // Map function should only run on edges with destination in the active set
-        if (et.dstId % 2 != 0) {
-          throw new Exception("map ran on edge with dst vid %d, which is odd".format(et.dstId))
-        }
-        Iterator((et.srcId, 1))
-      }, (a: Int, b: Int) => a + b, Some((active, EdgeDirection.In))).collect.toSet
+      val numEvenNeighbors = vids.mapReduceTriplets[Int](
+        et => {
+          // Map function should only run on edges with destination in the active set
+          if (et.dstId % 2 != 0) {
+            throw new Exception("map ran on edge with dst vid %d, which is odd".format(et.dstId))
+          }
+          et.sendMessage(et.srcId, 1)
+        },
+        _ + _,
+        Some((active, EdgeDirection.In))).collect.toSet
       assert(numEvenNeighbors === (1 to n).map(x => (x: Vid, n / 2)).toSet)
 
       // outerJoinVertices followed by mapReduceTriplets(activeSetOpt)
@@ -236,13 +242,16 @@ class GraphSuite extends FunSuite with LocalSparkContext {
         .mapVertices((vid, attr) => vid).cache()
       val changed = ring.vertices.filter { case (vid, attr) => attr % 2 == 1 }.mapValues(-_)
       val changedGraph = ring.outerJoinVertices(changed) { (vid, old, newOpt) => newOpt.getOrElse(old) }
-      val numOddNeighbors = changedGraph.mapReduceTriplets(et => {
-        // Map function should only run on edges with source in the active set
-        if (et.srcId % 2 != 1) {
-          throw new Exception("map ran on edge with src vid %d, which is even".format(et.dstId))
-        }
-        Iterator((et.dstId, 1))
-      }, (a: Int, b: Int) => a + b, Some(changed, EdgeDirection.Out)).collect.toSet
+      val numOddNeighbors = changedGraph.mapReduceTriplets[Int](
+        et => {
+          // Map function should only run on edges with source in the active set
+          if (et.srcId % 2 != 1) {
+            throw new Exception("map ran on edge with src vid %d, which is even".format(et.dstId))
+          }
+          et.sendMessage(et.dstId, 1)
+        },
+        _ + _,
+        Some(changed, EdgeDirection.Out)).collect.toSet
       assert(numOddNeighbors === (2 to n by 2).map(x => (x: Vid, 1)).toSet)
 
     }
@@ -255,9 +264,12 @@ class GraphSuite extends FunSuite with LocalSparkContext {
       // outerJoinVertices changing type
       val reverseStarDegrees =
         reverseStar.outerJoinVertices(reverseStar.outDegrees) { (vid, a, bOpt) => bOpt.getOrElse(0) }
-      val neighborDegreeSums = reverseStarDegrees.mapReduceTriplets(
-        et => Iterator((et.srcId, et.dstAttr), (et.dstId, et.srcAttr)),
-        (a: Int, b: Int) => a + b).collect.toSet
+      val neighborDegreeSums = reverseStarDegrees.mapReduceTriplets[Int](
+        et => {
+          et.sendMessage(et.srcId, et.dstAttr)
+          et.sendMessage(et.dstId, et.srcAttr)
+        },
+        _ + _).collect.toSet
       assert(neighborDegreeSums === Set((0: Vid, n)) ++ (1 to n).map(x => (x: Vid, 0)))
       // outerJoinVertices preserving type
       val messages = reverseStar.vertices.mapValues { (vid, attr) => vid.toString }

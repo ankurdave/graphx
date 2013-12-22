@@ -116,23 +116,14 @@ class GraphOps[VD: ClassManifest, ED: ClassManifest](graph: Graph[VD, ED]) {
     : VertexRDD[A] = {
 
     // Define a new map function over edge triplets
-    val mf = (et: EdgeTriplet[VD,ED]) => {
+    val mf = (et: MessageSendingEdgeTriplet[VD, ED, A]) => {
       // Compute the message to the dst vertex
-      val dst =
-        if (dir == EdgeDirection.In || dir == EdgeDirection.Both) {
-          mapFunc(et.dstId, et)
-        } else { Option.empty[A] }
+      if (dir == EdgeDirection.In || dir == EdgeDirection.Both) {
+        mapFunc(et.dstId, et).foreach { msg => et.sendMessage(et.dstId, msg) }
+      }
       // Compute the message to the source vertex
-      val src =
-        if (dir == EdgeDirection.Out || dir == EdgeDirection.Both) {
-          mapFunc(et.srcId, et)
-        } else { Option.empty[A] }
-      // construct the return array
-      (src, dst) match {
-        case (None, None) => Iterator.empty
-        case (Some(srcA),None) => Iterator((et.srcId, srcA))
-        case (None, Some(dstA)) => Iterator((et.dstId, dstA))
-        case (Some(srcA), Some(dstA)) => Iterator((et.srcId, srcA), (et.dstId, dstA))
+      if (dir == EdgeDirection.Out || dir == EdgeDirection.Both) {
+        mapFunc(et.srcId, et).foreach { msg => et.sendMessage(et.srcId, msg) }
       }
     }
 

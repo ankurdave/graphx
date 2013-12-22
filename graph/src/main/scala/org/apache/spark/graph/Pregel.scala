@@ -87,7 +87,7 @@ object Pregel {
   def apply[VD: ClassManifest, ED: ClassManifest, A: ClassManifest]
     (graph: Graph[VD, ED], initialMsg: A, maxIterations: Int = Int.MaxValue)(
       vprog: (Vid, VD, A) => VD,
-      sendMsg: EdgeTriplet[VD, ED] => Iterator[(Vid,A)],
+      sendMsg: MessageSendingEdgeTriplet[VD, ED, A] => Unit,
       mergeMsg: (A, A) => A)
     : Graph[VD, ED] = {
 

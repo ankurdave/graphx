@@ -194,7 +194,7 @@ abstract class Graph[VD: ClassManifest, ED: ClassManifest] {
    * @return the subgraph containing only the vertices and edges that
    * satisfy the predicates.
    */
-  def subgraph(epred: EdgeTriplet[VD,ED] => Boolean = (x => true),
+  def subgraph(epred: EdgeTriplet[VD, ED] => Boolean = (x => true),
     vpred: (Vid, VD) => Boolean = ((v,d) => true) ): Graph[VD, ED]
 
   /**
@@ -256,7 +256,7 @@ abstract class Graph[VD: ClassManifest, ED: ClassManifest] {
    *
    */
   def mapReduceTriplets[A: ClassManifest](
-      mapFunc: EdgeTriplet[VD, ED] => Iterator[(Vid, A)],
+      mapFunc: MessageSendingEdgeTriplet[VD, ED, A] => Unit,
       reduceFunc: (A, A) => A,
       activeSetOpt: Option[(VertexRDD[_], EdgeDirection)] = None)
     : VertexRDD[A]

@@ -34,7 +34,7 @@ class EdgeTriplet[VD, ED] extends Edge[ED] {
   /**
    * Set the edge properties of this triplet.
    */
-  protected[spark] def set(other: Edge[ED]): EdgeTriplet[VD,ED] = {
+  protected[spark] def set(other: Edge[ED]): EdgeTriplet[VD, ED] = {
     srcId = other.srcId
     dstId = other.dstId
     attr = other.attr
@@ -60,4 +60,14 @@ class EdgeTriplet[VD, ED] extends Edge[ED] {
     if (srcId == vid) srcAttr else { assert(dstId == vid); dstAttr }
 
   override def toString() = ((srcId, srcAttr), (dstId, dstAttr), attr).toString()
+}
+
+abstract class MessageSendingEdgeTriplet[VD, ED, M] extends EdgeTriplet[VD, ED] {
+  /** Within the map function in Graph.mapReduceTriplets, send a message to the target vertex. */
+  def sendMessage(target: Vid, message: M)
+
+  /** The position of the source vertex attribute within the VertexPartition. */
+  protected[spark] var srcPos: Int = -1
+  /** The position of the destination vertex attribute within the VertexPartition. */
+  protected[spark] var dstPos: Int = -1
 }

@@ -234,7 +234,7 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
   //////////////////////////////////////////////////////////////////////////////////////////////////
 
   override def mapReduceTriplets[A: ClassManifest](
-      mapFunc: EdgeTriplet[VD, ED] => Iterator[(Vid, A)],
+      mapFunc: MessageSendingEdgeTriplet[VD, ED, A] => Unit,
       reduceFunc: (A, A) => A,
       activeSetOpt: Option[(VertexRDD[_], EdgeDirection)] = None) = {
 
@@ -243,8 +243,8 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
 
     // For each vertex, replicate its attribute only to partitions where it is
     // in the relevant position in an edge.
-    val mapUsesSrcAttr = accessesVertexAttr[VD, ED](mapFunc, "srcAttr")
-    val mapUsesDstAttr = accessesVertexAttr[VD, ED](mapFunc, "dstAttr")
+    val mapUsesSrcAttr = accessesVertexAttr[VD, ED, A](mapFunc, "srcAttr")
+    val mapUsesDstAttr = accessesVertexAttr[VD, ED, A](mapFunc, "dstAttr")
     val vs = activeSetOpt match {
       case Some((activeSet, _)) => vTableReplicated.get(mapUsesSrcAttr, mapUsesDstAttr, activeSet)
       case None => vTableReplicated.get(mapUsesSrcAttr, mapUsesDstAttr)
@@ -277,20 +277,10 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
           edgePartition.iterator
       }
 
-      // Scan edges and run the map function
-      val et = new EdgeTriplet[VD, ED]
-      val mapOutputs = edgeIter.flatMap { e =>
-        et.set(e)
-        if (mapUsesSrcAttr) {
-          et.srcAttr = vPart(e.srcId)
-        }
-        if (mapUsesDstAttr) {
-          et.dstAttr = vPart(e.dstId)
-        }
-        mapFunc(et)
-      }
-      // Note: This doesn't allow users to send messages to arbitrary vertices.
-      vPart.aggregateUsingIndex(mapOutputs, reduceFunc).iterator
+      // Scan edges and aggregate. Note: This doesn't allow users to send messages to arbitrary
+      // vertices.
+      vPart.aggregateEdgesUsingIndex(
+        edgeIter, mapFunc, reduceFunc, mapUsesSrcAttr, mapUsesDstAttr).iterator
     }
 
     // do the final reduction reusing the index map
@@ -314,9 +304,9 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
     }
   }
 
-  private def accessesVertexAttr[VD, ED](closure: AnyRef, attrName: String): Boolean = {
+  private def accessesVertexAttr[VD, ED, A](closure: AnyRef, attrName: String): Boolean = {
     try {
-      BytecodeUtils.invokedMethod(closure, classOf[EdgeTriplet[VD, ED]], attrName)
+      BytecodeUtils.invokedMethod(closure, classOf[MessageSendingEdgeTriplet[VD, ED, A]], attrName)
     } catch {
       case _: ClassNotFoundException => true // if we don't know, be conservative
     }

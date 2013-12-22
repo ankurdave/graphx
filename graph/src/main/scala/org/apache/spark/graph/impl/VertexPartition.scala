@@ -235,6 +235,54 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
     new VertexPartition[VD2](index, newValues, newMask)
   }
 
+  /**
+   * Run `mapFunc` on each edge in `edgeIter`, augmented with vertex attributes from this
+   * VertexPartition, and aggregate the resulting messages using `reduceFunc` to create a new
+   * VertexPartition.
+   */
+  def aggregateEdgesUsingIndex[ED, M: ClassManifest](
+      edgeIter: Iterator[Edge[ED]],
+      mapFunc: MessageSendingEdgeTriplet[VD, ED, M] => Unit,
+      reduceFunc: (M, M) => M,
+      setSrcAttr: Boolean,
+      setDstAttr: Boolean): VertexPartition[M] = {
+    val newMask = new BitSet(capacity)
+    val newValues = new Array[M](capacity)
+    // Set up EdgeTriplet.sendMessage to perform the aggregation
+    val et = new MessageSendingEdgeTriplet[VD, ED, M] {
+      override def sendMessage(target: Vid, message: M) {
+        val pos =
+          if (target == this.srcId) this.srcPos
+          else if (target == this.dstId) this.dstPos
+          else index.getPos(target)
+        if (pos >= 0) {
+          if (newMask.get(pos)) {
+            newValues(pos) = reduceFunc(newValues(pos), message)
+          } else { // otherwise just store the new value
+            newMask.set(pos)
+            newValues(pos) = message
+          }
+        }
+      }
+    }
+    // Run mapFunc on each edge
+    edgeIter.foreach { e =>
+      val srcPos = index.getPos(e.srcId)
+      val dstPos = index.getPos(e.dstId)
+      et.set(e)
+      if (setSrcAttr) {
+        et.srcPos = srcPos
+        et.srcAttr = values(srcPos)
+      }
+      if (setDstAttr) {
+        et.dstPos = dstPos
+        et.dstAttr = values(dstPos)
+      }
+      mapFunc(et)
+    }
+    new VertexPartition[M](index, newValues, newMask)
+  }
+
   def replaceActives(iter: Iterator[Vid]): VertexPartition[VD] = {
     val newActiveSet = new VertexSet
     iter.foreach(newActiveSet.add(_))
